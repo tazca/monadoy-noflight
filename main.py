@@ -13,7 +13,7 @@ import noflightsolver
 FRONTEND_BASE = "noflight.monad.fi"
 BACKEND_BASE = "noflight.monad.fi/backend"
 
-game_id = "01GRGYJDPAZX0CW2YKBE6T9C6H"
+game_id = ""
 game_solver = noflightsolver.NoflightSolver()
 
 # Example level payload:
@@ -33,6 +33,7 @@ def on_message(ws: websocket.WebSocketApp, message):
     # NoflightSolver.solve returns required commands for current tick.
     # It doesn't do any actual solving after 1st tick.
     commands = game_solver.solve(game_state)
+
 
     print(str(json.dumps(["run-command", {"gameId": game_id, "payload": commands}])))
     time.sleep(0.1)
@@ -79,6 +80,8 @@ def main():
 
     global game_id
     game_id = game_instance["entityId"]
+
+    print(game_id)
 
     url = f"https://{FRONTEND_BASE}/?id={game_id}"
     print(f"Game at {url}")
