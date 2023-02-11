@@ -79,26 +79,38 @@ def findTangentPoints(start_c_xy, end_c_xy, circle_r):
     print(tangent_2)
     return (angle, (tangent_1, tangent_2))
 
-def select_closest_tangent_point(startxy, startdir, tangents):
+def crossing_tangent(s_t, e_t):
+    # Let's just settle for an approximation by calculating hypotenuse from existing tangent points
+    # for now
+    pass
+
+def select_ideal_tangent_point(startxy, startdir, enddir, tangents):
     # less turning is better, so choose a point with least turning required
     # for simplicity, assume for now, that we won't be criss-crossing between circles
+    # for 3rd level criss-crossing is required, so a more complicated heuristic is required
     (sx, sy) = startxy
     (a, ((t1x, t1y), (t2x, t2y))) = tangents
+
+
+    select_farther: bool = False
+    # We have to do an U-loop which should mean the farther tangent is preferable
+    if angular_difference(startdir, enddir) > 90:
+        select_farther = True
+        print("U-loop inc")
+
     t1dir = calculateDirection(startxy, (t1x, t1y))
     t2dir = calculateDirection(startxy, (t2x, t2y))
 
-    # BUG: there is a rather large offset with circleXY calculation, requiring 3-point margins here.
-    # When turning is not necessary, tangent point will be on top of aircraft and it may mess up
-    # the angular heuristic. Let's check that here:
-    if fabs(sx - t1x) < 3 and fabs(sy - t1y) < 3:
-        return (a, (t1x, t1y))
-    elif fabs(sx - t2x) < 3 and fabs(sy - t2y) < 3:
-        return (a, (t2x, t2y))
-
     if angular_difference(startdir, t1dir) <= angular_difference(startdir, t2dir):
-        return (a, (t1x, t1y))
+        if select_farther:
+            return (a, (t2x, t2y))
+        else:
+            return (a, (t1x, t1y))
     else:
-        return (a, (t2x, t2y))
+        if select_farther:
+            return (a, (t1x, t1y))
+        else:
+            return (a, (t2x, t2y))
 
 def angular_difference(a1, a2):
     # credit to https://math.stackexchange.com/q/3497743

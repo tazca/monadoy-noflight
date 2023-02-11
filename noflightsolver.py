@@ -4,7 +4,7 @@ from typing import Optional
 # debugging
 import json
 
-from lib.math import calculateDirection, calculateLength, normalize_heading, rightOrLeft, turnCircleXY, findTangentPoints, select_closest_tangent_point, angular_difference
+from lib.math import calculateDirection, calculateLength, normalize_heading, rightOrLeft, turnCircleXY, findTangentPoints, select_ideal_tangent_point, angular_difference
 
 class NoflightSolver:
 
@@ -32,16 +32,35 @@ class NoflightSolver:
                                                  (ap["position"]["x"], ap["position"]["y"]),
                                                  ap["direction"])
                         self.commands_list.append((ac["id"], path))  # will need to be zipped with other aircraft paths
-            for (ac_id, ac_cmds) in self.commands_list:
-                print(ac_cmds)
-                for c in ac_cmds:
-                    if c != None: # single aircraft control for now
-                        self.commands.append(["HEAD " + ac_id + " " + str(c)])
-                    else:
-                        self.commands.append([])
+#            for (ac_id, ac_cmds) in self.commands_list:
+#                print(ac_cmds)
+#                for c in ac_cmds:
+#                    if c != None: # single aircraft control for now
+#                        self.commands.append(["HEAD " + ac_id + " " + str(c)])
+#                    else:
+#                        self.commands.append([])
+            print(self.commands_list)
+            for ac in self.commands_list:
+                self._map_path_on_cmds(ac)
             print(self.commands)
 
         return self.commands.pop(0)
+
+    def _map_path_on_cmds(self, cmds_list):
+        (ac_id, cmds) = cmds_list
+        for i in range(len(cmds)):
+            c = cmds[i]
+            if c != None:
+                if len(self.commands) == i:  # create new cell
+                    self.commands.append(["HEAD " + ac_id + " " + str(c)])
+                else:
+                    self.commands[i].append("HEAD " + ac_id + " " + str(c))
+            else:
+                if len(self.commands) == i:  # create new cell
+                    self.commands.append([])
+                else:
+                    pass
+
 
 
     def _makeOptimalRoute(self, startxy, startdir, endxy, enddir):
@@ -71,34 +90,53 @@ class NoflightSolver:
         eca_side_mirrored = rightOrLeft(endxy, normalize_heading(enddir + 180), startxy, normalize_heading(startdir + 180))
         eca = turnCircleXY(endxy, normalize_heading(enddir + 180), startxy, normalize_heading(startdir + 180), self.TURN_R)
         print("ending circle " + str(eca))
-        (s_e_a, s_e_xy) = select_closest_tangent_point(startxy, startdir, findTangentPoints(sca, eca, self.TURN_R))
+        (s_e_a, s_e_xy) = select_ideal_tangent_point(startxy, startdir, calculateDirection(startxy, endxy), findTangentPoints(sca, eca, self.TURN_R))
         print(s_e_a)
         print("starting tangent point " + str(s_e_xy))
         # I think the angle is enough here; we'll just turn heading as fast as possible, until desired heading is reached.
-        sca_cmds = self._makeTurn(startdir, s_e_a, sca_side)
-        eca_cmds = self._makeTurn(s_e_a, enddir, 0 - eca_side_mirrored)
         # we need only the start angle:
-        (_, e_s_xy) = select_closest_tangent_point(endxy, normalize_heading(enddir + 180), findTangentPoints(eca, sca, self.TURN_R))
+        (_, e_s_xy) = select_ideal_tangent_point(endxy, normalize_heading(enddir + 180), calculateDirection(endxy, startxy), findTangentPoints(eca, sca, self.TURN_R))
         print("ending tangent point " + str(e_s_xy))
+
+        # Does start-end circles think the optimal route is when tangent line "separates" the circles
+        angle = calculateDirection(s_e_xy, e_s_xy)
+        print("real angle " + str(angle) + "; " + str(angular_difference(angle, s_e_a)))
+        if angular_difference(angle, s_e_a) >= 1:
+            sca_cmds = self._makeTurn(startdir, angle, sca_side)
+            eca_cmds = self._makeTurn(angle, enddir, 0 - eca_side_mirrored)
+        else:
+            sca_cmds = self._makeTurn(startdir, s_e_a, sca_side)
+            eca_cmds = self._makeTurn(s_e_a, enddir, 0 - eca_side_mirrored)
+
         leg_sca_eca = calculateLength(s_e_xy, e_s_xy)
+
         # landing radius is always more than 5, so let's not waste time on optimizing landing regarding 5/tick discrete movements
-        cruising_turns = round(leg_sca_eca / 5)
+        cruising_turns = floor(leg_sca_eca / 5)
         print(leg_sca_eca)
-        if (angular_difference(s_e_a, startdir) >= 1):
-            for c in sca_cmds:
-                flight_path.append(c)
+#        if (angular_difference(s_e_a, startdir) >= 1):
+        for c in sca_cmds:
+            flight_path.append(c)
         for i in range(cruising_turns):
             flight_path.append(None)
-        if (angular_difference(s_e_a, enddir) >= 1):
-            for c in eca_cmds:
-                flight_path.append(c)
+#        if (angular_difference(s_e_a, enddir) >= 1):
+        for c in eca_cmds:
+            flight_path.append(c)
         return flight_path
 
     def _makeTurn(self, start_dir, end_dir, lr):
         commands = []
         cur_dir = start_dir
         print(str(start_dir) + " to " + str(end_dir))
-        turn = angular_difference(start_dir, end_dir)
+        if lr == 1: # left, ccw
+            if start_dir < end_dir:
+                turn = end_dir - start_dir
+            else:
+                turn = 360 - (start_dir - end_dir)
+        else:  # right, cw
+            if start_dir > end_dir:
+                turn = start_dir - end_dir
+            else:
+                turn = 360 - (end_dir - start_dir)
         full_turns = floor(turn / 20)
         print(full_turns)
         for t in range(full_turns):
@@ -108,6 +146,7 @@ class NoflightSolver:
         print(final_turn)
         if angular_difference(cur_dir, final_turn) >= 1:
             commands.append(final_turn)
+        print(commands)
         return commands
 
 if __name__ == "__main__":  # allow piping JSON payload for debugging
