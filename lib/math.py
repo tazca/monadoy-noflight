@@ -1,17 +1,26 @@
 from math import atan, degrees, fabs, pi, radians, sin, cos, hypot
+from typing import Tuple
 
 def normalize_heading(heading):
     """Normalize any angle to 0-359"""
     return round(heading + 360) % 360
 
-def calculateDirection(startxy, endxy):
-    # direction 0 is x+, 90 y+, 180 x-, 270 y-
-    # startxy == endxy is undefined behaviour
-    (sx, sy) = startxy
-    (ex, ey) = endxy
+def angular_difference(a1: float,
+                       a2: float
+                       ) -> float:
+    # credit to https://math.stackexchange.com/q/3497743
+    return min(fabs(a1-a2), 360 - fabs(a1-a2))
 
-    x = ex - sx
-    y = ey - sy
+def calculate_direction(start_xy: Tuple[float, float],
+                        end_xy: Tuple[float, float]
+                        ) -> float:
+    # direction 0 is x+, 90 y+, 180 x-, 270 y-
+    # start_xy == end_xy is undefined behaviour
+    (sx, sy) = start_xy
+    (ex, ey) = end_xy
+
+    x: float = ex - sx
+    y: float = ey - sy
 
     if x == 0:
         if y > 0:
@@ -35,73 +44,93 @@ def calculateDirection(startxy, endxy):
         elif x < 0 and y < 0:
             return 180 + d
 
-def calculateLength(startxy, endxy):
-    (sx, sy) = startxy
-    (ex, ey) = endxy
+def calculate_length(start_xy: Tuple[float, float],
+                     end_xy: Tuple[float, float]
+                     ) -> float:
+    (sx, sy) = start_xy
+    (ex, ey) = end_xy
 
-    x = ex - sx
-    y = ey - sy
+    x: float = ex - sx
+    y: float = ey - sy
 
     return hypot(x, y)
 
-def rightOrLeft(startxy, startdir, endxy, enddir):
+def right_or_left(start_xy: Tuple[float, float],
+                  start_dir: int,
+                  end_xy: Tuple[float, float],
+                  end_dir: int
+                  ) -> int:
     # return -1 for right, 0 for no turns required, 1 for left
     # < 0.5° means no turns required. We could also calculate minimum degrees for turning using landingRadius
-    dir_as_the_bird_flies = round(calculateDirection(startxy, endxy))
+    dir_as_the_bird_flies: int = round(calculate_direction(start_xy, end_xy))
 
-    if startdir == enddir and startdir == round(dir_as_the_bird_flies):
+    if start_dir == end_dir and start_dir == round(dir_as_the_bird_flies):
         return 0
-    elif dir_as_the_bird_flies > startdir and dir_as_the_bird_flies < startdir + 180:
+    elif dir_as_the_bird_flies > start_dir and dir_as_the_bird_flies < start_dir + 180:
         return 1
     else:
         return -1
 
-def turnCircleXY(startxy, startdir, endxy, enddir, circle_r):
-    lr = rightOrLeft(startxy, startdir, endxy, enddir)
+def turn_circle_xy(start_xy: Tuple[float, float],
+                   start_dir: int,
+                   end_xy: Tuple[float, float],
+                   end_dir: int,
+                   circle_r: float
+                   ) -> Tuple[float, float]:
+    # calculate circle center coordinates
+    lr: int = right_or_left(start_xy, start_dir, end_xy, end_dir)
     if lr == 0:
         # we have to have the circle on either side and not in front, let's default to right.
         lr = 1
-    circledir = normalize_heading(startdir + (90 * lr))
-    return calculatePathEnd(startxy, circledir, circle_r)
+    circledir: int = normalize_heading(start_dir + (90 * lr))
+    return calculate_leg_end(start_xy, circledir, circle_r)
 
-def calculatePathEnd(startxy, direction, length):
-    (sx, sy) = startxy
+def calculate_leg_end(start_xy: Tuple[float, float],
+                      direction: int,
+                      length: float
+                      ) -> Tuple[float, float]:
+    # calculate where we end up with select direction and length traveled
+    (sx, sy) = start_xy
     # we know an angle and hypotenuse of a right triangle, use cos and sin to find out side lengths
-    ey = sin(radians(direction)) * length
-    ex = cos(radians(direction)) * length
+    ey: float = sin(radians(direction)) * length
+    ex: float = cos(radians(direction)) * length
     return (sx + ex, sy + ey)
 
-def findTangentPoints(start_c_xy, end_c_xy, circle_r):
-    angle = calculateDirection(start_c_xy, end_c_xy)
-    tangent_1 = calculatePathEnd(start_c_xy, normalize_heading(angle + 90), circle_r)
-    tangent_2 = calculatePathEnd(start_c_xy, normalize_heading(angle + 270), circle_r)
-    print(tangent_1)
-    print(tangent_2)
+def find_tangent_points(start_c_xy: Tuple[float, float],
+                        end_c_xy: Tuple[float, float],
+                        circle_r: float
+                        ) -> Tuple[float, Tuple[Tuple[float, float], Tuple[float, float]]]:
+    # there are always 2 parallel tangent lines between 2 circles, let's find where the lines and circles cross
+    angle = calculate_direction(start_c_xy, end_c_xy)
+    tangent_1 = calculate_leg_end(start_c_xy, normalize_heading(angle + 90), circle_r)
+    tangent_2 = calculate_leg_end(start_c_xy, normalize_heading(angle + 270), circle_r)
     return (angle, (tangent_1, tangent_2))
 
-def crossing_tangent(s_t, e_t):
-    # Let's just settle for an approximation by calculating hypotenuse from existing tangent points
-    # for now
-    pass
-
-def select_ideal_tangent_point(startxy, startdir, enddir, tangents):
+def select_ideal_tangent_point(start_xy: Tuple[float, float],
+                               start_dir: float,
+                               end_dir: float,
+                               tangents: Tuple[float, Tuple[Tuple[float, float], Tuple[float, float]]]
+                               ) -> Tuple[float, Tuple[float, float]]:
     # less turning is better, so choose a point with least turning required
     # for simplicity, assume for now, that we won't be criss-crossing between circles
-    # for 3rd level criss-crossing is required, so a more complicated heuristic is required
-    (sx, sy) = startxy
+
+    # for 3rd level criss-crossing was required, so a more complicated heuristic was done
+    # with select_farther -mechanism.
+
+    (sx, sy) = start_xy
     (a, ((t1x, t1y), (t2x, t2y))) = tangents
 
 
     select_farther: bool = False
     # We have to do an U-loop which should mean the farther tangent is preferable
-    if angular_difference(startdir, enddir) > 90:
+    if angular_difference(start_dir, end_dir) > 90:
         select_farther = True
         print("U-loop inc")
 
-    t1dir = calculateDirection(startxy, (t1x, t1y))
-    t2dir = calculateDirection(startxy, (t2x, t2y))
+    t1dir: float = calculate_direction(start_xy, (t1x, t1y))
+    t2dir: float = calculate_direction(start_xy, (t2x, t2y))
 
-    if angular_difference(startdir, t1dir) <= angular_difference(startdir, t2dir):
+    if angular_difference(start_dir, t1dir) <= angular_difference(start_dir, t2dir):
         if select_farther:
             return (a, (t2x, t2y))
         else:
@@ -111,7 +140,3 @@ def select_ideal_tangent_point(startxy, startdir, enddir, tangents):
             return (a, (t1x, t1y))
         else:
             return (a, (t2x, t2y))
-
-def angular_difference(a1, a2):
-    # credit to https://math.stackexchange.com/q/3497743
-    return min(fabs(a1-a2), 360 - fabs(a1-a2))

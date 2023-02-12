@@ -1,4 +1,4 @@
-# Originally forked from https://github.com/monadoy/rekry2022-sample
+# main.py forked from https://github.com/monadoy/rekry2022-sample
 
 from dotenv import dotenv_values
 import requests
@@ -16,8 +16,6 @@ BACKEND_BASE = "noflight.monad.fi/backend"
 game_id = ""
 game_solver = noflightsolver.NoflightSolver()
 
-# Example level payload:
-# 'game-instance', {'entityId': '01GRGYKJ23X1Y82RRFEZJSMJGG', 'gameState': '{"bbox":[{"x":-180,"y":-180},{"x":180,"y":180}],"aircrafts":[{"id":"1","name":"1","position":{"x":-100,"y":0},"direction":0,"speed":5,"collisionRadius":20,"destination":"A"}],"airports":[{"name":"A","position":{"x":100,"y":0},"direction":0,"landingRadius":10}]}', 'ownerId': '01GRGVHDVB9XJ0J6GX8NY6B20A', 'status': 'ONGOING', 'reason': '', 'createdAt': '2023-02-05T14:10:14.723Z', 'gameType': 'NO_PLANE', 'score': 0, 'levelId': '01GH1E14E88DT3BYWHNYW85ZRV'}]
 
 def on_message(ws: websocket.WebSocketApp, message):
     [action, payload] = json.loads(message)
@@ -32,6 +30,8 @@ def on_message(ws: websocket.WebSocketApp, message):
 
     # NoflightSolver.solve returns required commands for current tick.
     # It doesn't do any actual solving after 1st tick.
+    # With this callback architecture, it's too much work to avoid making it a global variable
+    # to have state carried over between callbacks.
     commands = game_solver.solve(game_state)
 
 
@@ -51,17 +51,6 @@ def on_open(ws: websocket.WebSocketApp):
 
 def on_close(ws, close_status_code, close_msg):
     print("CLOSED")
-
-
-# Change this to your own implementation
-def generate_commands(game_state):
-    commands = []
-#    for aircraft in game_state["aircrafts"]:
-        # Go loopy loop
-#        new_dir = normalize_heading(aircraft['direction'] + 20)
-#        commands.append(f"HEAD {aircraft['id']} {new_dir}")
-
-    return commands
 
 
 def main():
